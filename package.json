@@ -10,11 +10,11 @@
     "start": "node server.js",
     "tunnel": "node scripts/startNgrokProxy.js",
     "test": "node --test",
-    "deploy": "gh-pages -d build -r git@github.com:GabrielVelasco/BET-Attack-Momentum.git"
+    "deploy": "gh-pages -d build -r git@github.com:GabrielVelasco/Fut-Attack-Momentum.git"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/GabrielVelasco/BET-Attack-Momentum.git"
+    "url": "git+https://github.com/GabrielVelasco/Fut-Attack-Momentum.git"
   },
   "keywords": [
     "sofascore",
@@ -30,9 +30,9 @@
   "author": "Gabriel Velasco",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/GabrielVelasco/BET-Attack-Momentum/issues"
+    "url": "https://github.com/GabrielVelasco/Fut-Attack-Momentum/issues"
   },
-  "homepage": "https://gabrielvelasco.github.io/BET-Attack-Momentum/",
+  "homepage": "https://gabrielvelasco.github.io/Fut-Attack-Momentum/",
   "devDependencies": {
     "gh-pages": "^6.1.1"
   }
