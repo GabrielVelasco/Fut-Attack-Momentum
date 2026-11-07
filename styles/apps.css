@@ -322,17 +322,97 @@ summary:focus-visible {
 .graph-frame {
     overflow: hidden;
     width: 100%;
-    aspect-ratio: 13 / 10;
+    min-width: 0;
     border: 1px solid var(--border);
     border-radius: 8px;
     background: var(--surface-muted);
+    padding: 10px;
 }
 
-.graph-frame iframe {
-    display: block;
-    width: 100%;
+.momentum-graph__legend {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.momentum-graph__legend span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.momentum-graph__home { color: var(--home); }
+.momentum-graph__away { color: #2563eb; }
+
+.momentum-graph__legend span::before {
+    content: "";
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    margin-right: 5px;
+    border-radius: 2px;
+    background: currentColor;
+}
+
+.momentum-graph__plot {
+    position: relative;
+    height: 120px;
+    background: linear-gradient(to bottom, transparent calc(50% - 0.5px), var(--border) calc(50% - 0.5px), var(--border) calc(50% + 0.5px), transparent calc(50% + 0.5px));
+}
+
+.momentum-graph__bars {
+    display: grid;
     height: 100%;
-    border: 0;
+    gap: 1px;
+}
+
+.momentum-graph__slice {
+    position: relative;
+    min-width: 0;
+}
+
+.momentum-graph__bar {
+    position: absolute;
+    width: 100%;
+}
+
+.momentum-graph__bar--home {
+    bottom: 50%;
+    background: var(--home);
+    border-radius: 1px 1px 0 0;
+}
+
+.momentum-graph__bar--away {
+    top: 50%;
+    background: #2563eb;
+    border-radius: 0 0 1px 1px;
+}
+
+.momentum-graph__axis {
+    position: relative;
+    height: 20px;
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 10px;
+}
+
+.momentum-graph__axis span {
+    position: absolute;
+    transform: translateX(-50%);
+}
+
+.momentum-graph__axis span:first-child { transform: none; }
+.momentum-graph__axis span:last-child { transform: translateX(-100%); }
+
+.momentum-graph__status {
+    min-height: 16px;
+    margin: 0;
+    color: var(--muted);
+    font-size: 11px;
+    text-align: center;
 }
 
 .period-selector {

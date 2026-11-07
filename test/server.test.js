@@ -2,7 +2,7 @@ const assert = require("node:assert/strict");
 const { test } = require("node:test");
 const { createProxyServer } = require("../server.js");
 
-test("forwards only the two supported SofaScore routes", async () => {
+test("forwards only the supported SofaScore routes", async () => {
     const upstreamUrls = [];
     const server = createProxyServer({
         fetchImpl: async (url) => {
@@ -18,17 +18,26 @@ test("forwards only the two supported SofaScore routes", async () => {
         const baseUrl = `http://127.0.0.1:${server.address().port}`;
         const live = await fetch(`${baseUrl}/api/live`);
         const stats = await fetch(`${baseUrl}/api/event/12345/statistics`);
+        const momentum = await fetch(`${baseUrl}/api/event/12345/graph/momentum`);
+        const invalidMomentum = await fetch(`${baseUrl}/api/event/not-an-id/graph/momentum`);
+        const unsupportedGraph = await fetch(`${baseUrl}/api/event/12345/graph/other`);
         const health = await fetch(`${baseUrl}/health`);
         const invalid = await fetch(`${baseUrl}/api/event/not-an-id/statistics`);
 
         assert.equal(live.status, 200);
         assert.deepEqual(await live.json(), { ok: true });
         assert.equal(stats.status, 200);
+        assert.equal(momentum.status, 200);
+        assert.deepEqual(await momentum.json(), { ok: true });
+        assert.equal(momentum.headers.get("cache-control"), "no-store");
+        assert.equal(invalidMomentum.status, 404);
+        assert.equal(unsupportedGraph.status, 404);
         assert.deepEqual(await health.json(), { status: "ok" });
         assert.equal(invalid.status, 404);
         assert.deepEqual(upstreamUrls, [
             "https://www.sofascore.com/api/v1/sport/football/events/live",
-            "https://www.sofascore.com/api/v1/event/12345/statistics"
+            "https://www.sofascore.com/api/v1/event/12345/statistics",
+            "https://www.sofascore.com/api/v1/event/12345/graph/momentum"
         ]);
     } finally {
         server.closeAllConnections();

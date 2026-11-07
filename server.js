@@ -47,8 +47,8 @@ function createProxyServer({ fetchImpl = fetch, allowedOrigins = DEFAULT_ALLOWED
         if (pathname === "/api/live") {
             upstreamPath = "/api/v1/sport/football/events/live";
         } else {
-            const match = /^\/api\/event\/(\d+)\/statistics$/.exec(pathname);
-            if (match) upstreamPath = `/api/v1/event/${match[1]}/statistics`;
+            const match = /^\/api\/event\/(\d+)\/(statistics|graph\/momentum)$/.exec(pathname);
+            if (match) upstreamPath = `/api/v1/event/${match[1]}/${match[2]}`;
         }
 
         if (!upstreamPath) {

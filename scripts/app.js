@@ -1,7 +1,9 @@
+import { createMomentumGraph, renderMomentumGraph, showMomentumError } from "./momentumGraph.js";
 import { addDragAndDropHandlers } from "./dragAndDrop.js";
 import {
     getLiveEventsList,
-    getSatsFromAPI
+    getSatsFromAPI,
+    getMomentumFromAPI
 } from "./apiConfig.js";
 
 const mainCont = document.querySelector(".main-container");
@@ -37,7 +39,9 @@ let liveMatchesList = [];
 let dismissedMatchIds = new Set();
 let liveRefreshInFlight = false;
 let statsRefreshInFlight = false;
-let iframeObserver = null;
+let momentumRefreshInFlight = false;
+const momentumRequests = new WeakMap();
+const momentumUpdatedAt = new WeakMap();
 
 function setStatus(message, type = "idle") {
     statusText.textContent = message;
@@ -64,10 +68,6 @@ function getMatchStatus(match) {
     return match.status?.description || match.status?.type || "Live";
 }
 
-function hasPressureGraph(match) {
-    return Boolean(match.hasEventPlayerHeatMap || match.hasEventPlayerStatistics);
-}
-
 function getPeriodIndex(periodName) {
     if (periodName === "1ST") return 1;
     if (periodName === "2ND") return 2;
@@ -90,43 +90,6 @@ function getCardSearchText(match) {
         match.tournament?.name,
         match.category?.name
     ].filter(Boolean).join(" ").toLowerCase();
-}
-
-function createIframeElementFor(matchID, matchTitle) {
-    const iframeElement = document.createElement("iframe");
-    iframeElement.dataset.src = `https://widgets.sofascore.com/embed/attackMomentum?id=${matchID}&widgetBackground=Gray&v=2`;
-    iframeElement.title = `${matchTitle} attack momentum graph`;
-    iframeElement.loading = "lazy";
-    iframeElement.scrolling = "no";
-    iframeElement.referrerPolicy = "strict-origin-when-cross-origin";
-
-    return iframeElement;
-}
-
-function hydrateIframe(iframe) {
-    if (!iframe || iframe.src || !iframe.dataset.src) return;
-    iframe.src = iframe.dataset.src;
-}
-
-function setupIframeObserver() {
-    if (!("IntersectionObserver" in window)) return;
-
-    iframeObserver = new IntersectionObserver((entries) => {
-        entries.forEach((entry) => {
-            if (!entry.isIntersecting) return;
-            hydrateIframe(entry.target);
-            iframeObserver.unobserve(entry.target);
-        });
-    }, { rootMargin: "320px 0px" });
-}
-
-function observeIframe(iframe) {
-    if (iframeObserver) {
-        iframeObserver.observe(iframe);
-        return;
-    }
-
-    hydrateIframe(iframe);
 }
 
 function createPeriodSelector(matchID) {
@@ -234,25 +197,18 @@ function createMatchCard(match) {
     signal.classList.add("match-card__signal");
     signal.textContent = "Stats pending";
 
-    const frameWrap = document.createElement("div");
-    frameWrap.classList.add("graph-frame");
-    const iframeElement = createIframeElementFor(
-        match.id,
-        `${getTeamName(match.homeTeam)} vs ${getTeamName(match.awayTeam)}`
-    );
-    frameWrap.appendChild(iframeElement);
+    const graph = createMomentumGraph();
 
     matchCard.append(
         matchCardHeader,
         signal,
-        frameWrap,
+        graph,
         createPeriodSelector(match.id),
         createStatsElement(match.id)
     );
 
     updateCardHeader(matchCard, match);
     addDragAndDropHandlers(matchCard);
-    observeIframe(iframeElement);
 
     return matchCard;
 }
@@ -270,15 +226,14 @@ function updateLeagueOptions(matches) {
 }
 
 function renderMatches(matches) {
-    const matchesWithGraphs = matches.filter(hasPressureGraph);
-    const activeIds = new Set(matchesWithGraphs.map((match) => String(match.id)));
+    const activeIds = new Set(matches.map((match) => String(match.id)));
     const fragment = document.createDocumentFragment();
 
     document.querySelectorAll(".match-card").forEach((card) => {
         if (!activeIds.has(String(card.dataset.id))) card.remove();
     });
 
-    matchesWithGraphs.forEach((match) => {
+    matches.forEach((match) => {
         const existingCard = document.querySelector(`.match-card[data-id="${match.id}"]`);
 
         if (existingCard) {
@@ -290,7 +245,7 @@ function renderMatches(matches) {
     });
 
     mainCont.appendChild(fragment);
-    updateLeagueOptions(matchesWithGraphs);
+    updateLeagueOptions(matches);
     applyFilters();
 }
 
@@ -310,10 +265,10 @@ function applyFilters() {
         if (shouldShow) visibleCount += 1;
     });
 
-    matchCount.textContent = `${visibleCount} visible / ${cards.length} with graphs`;
+    matchCount.textContent = `${visibleCount} visible / ${cards.length} matches`;
     emptyState.textContent = cards.length > 0
         ? "No matches match the current filters."
-        : "No live matches with available pressure graphs right now.";
+        : "No live matches right now.";
     emptyState.hidden = cards.length > 0 && visibleCount > 0;
 }
 
@@ -432,6 +387,48 @@ async function updateStatsForVisible() {
     }
 }
 
+async function updateMomentumForCard(card, { force = false } = {}) {
+    if (momentumRequests.has(card)) return momentumRequests.get(card);
+    if (!force && Date.now() - (momentumUpdatedAt.get(card) || 0) < scoreUpdateInterval) return;
+
+    const graph = card.querySelector(".momentum-graph");
+    const request = (async () => {
+        try {
+            const data = await getMomentumFromAPI(card.dataset.id);
+            renderMomentumGraph(graph, data, card.dataset.home, card.dataset.away);
+        } catch (error) {
+            showMomentumError(graph);
+            console.error(`Error updating momentum for ${card.dataset.id}:`, error.message);
+        } finally {
+            momentumUpdatedAt.set(card, Date.now());
+            momentumRequests.delete(card);
+        }
+    })();
+    momentumRequests.set(card, request);
+    return request;
+}
+
+async function updateMomentumForVisible({ force = false } = {}) {
+    if (momentumRefreshInFlight) return;
+    momentumRefreshInFlight = true;
+    try {
+        const cards = [...document.querySelectorAll(".match-card:not([hidden])")];
+        let cursor = 0;
+        await Promise.all(Array.from({ length: Math.min(maxParallelStatRequests, cards.length) }, async () => {
+            while (cursor < cards.length) {
+                const card = cards[cursor++];
+                if (card.isConnected && !card.hidden) await updateMomentumForCard(card, { force });
+            }
+        }));
+    } finally {
+        momentumRefreshInFlight = false;
+        // A filter or score refresh may have revealed cards while requests were in flight.
+        if ([...document.querySelectorAll(".match-card:not([hidden])")].some((card) => !momentumUpdatedAt.has(card))) {
+            void updateMomentumForVisible();
+        }
+    }
+}
+
 async function loadLiveMatches({ refreshStats = false } = {}) {
     if (liveRefreshInFlight) return;
 
@@ -450,6 +447,7 @@ async function loadLiveMatches({ refreshStats = false } = {}) {
         setStatus(error.message || "Could not load live matches", "error");
         console.error("Error loading live matches:", error);
     } finally {
+        void updateMomentumForVisible({ force: true });
         liveRefreshInFlight = false;
         refreshButton.disabled = false;
     }
@@ -483,15 +481,18 @@ function handleCardClick(event) {
 }
 
 function bindEvents() {
-    leagueSelector.addEventListener("change", applyFilters);
-    matchSearch.addEventListener("input", applyFilters);
+    const filterMatches = () => {
+        applyFilters();
+        void updateMomentumForVisible();
+    };
+    leagueSelector.addEventListener("change", filterMatches);
+    matchSearch.addEventListener("input", filterMatches);
     refreshButton.addEventListener("click", () => loadLiveMatches({ refreshStats: true }));
 
     document.addEventListener("click", handleCardClick);
 }
 
 async function main() {
-    setupIframeObserver();
     bindEvents();
 
     await loadLiveMatches({ refreshStats: true });
