@@ -1,5 +1,5 @@
 // Set this to the public URL of the deployed Node proxy for the GitHub Pages site.
-const DEPLOYED_PROXY_BASE_URL = "https://e6ac-2804-4b10-500-fc00-3ed9-9548-3d92-bce3.ngrok-free.app";
+const DEPLOYED_PROXY_BASE_URL = "https://9181-2804-4b10-505-b700-21a8-6603-9986-3c62.ngrok-free.app";
 const DEFAULT_API_BASE_URL = ["localhost", "127.0.0.1"].includes(window.location.hostname)
     ? "http://localhost:3001"
     : DEPLOYED_PROXY_BASE_URL;
@@ -48,9 +48,14 @@ function getSatsFromAPI(matchID) {
     return requestJson(`/api/event/${matchID}/statistics`);
 }
 
+function getMomentumFromAPI(matchID) {
+    return requestJson(`/api/event/${matchID}/graph/momentum`);
+}
+
 export {
     DEFAULT_API_BASE_URL,
     getApiBaseUrl,
     getLiveEventsList,
-    getSatsFromAPI
+    getSatsFromAPI,
+    getMomentumFromAPI
 };
